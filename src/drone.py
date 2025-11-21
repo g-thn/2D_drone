@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from scipy.integrate import RK45
+from scipy.integrate import quad
 
 # Define the drone class
 class Drone:
@@ -485,7 +486,42 @@ class Drone:
             r.step()
             self.updateState(r.t, r.y)
         self.plot()
+    
+    def integrate(tVect,varVect):
+        """
+        Integrates the equations of motion for the drone
+        args:
+            tVect: time vector
+            varVect: state vector
+        returns:
+            integrated state vector
+        """
+        return np.trapz(varVect,tVect)
+    
+    def energy(self):
+        """
+        Calculates the energy of the drone
+        args:
+            None
+        returns:
+            energy: energy of the drone
+        """
+        # Kinetic energy
+        ke = 0.5*self.mass*(self.stVec[:, 3]**2+self.stVec[:, 4]**2) + 0.5*self.inertia*self.stVec[:, 5]**2
+        # Potential energy
+        pe = self.mass*self.g*self.stVec[:, 1]
+        return ke + pe
 
+    def evelFuncOpt(self, pidCoeff):
+        """
+        Evaluates the performace function for PID coefficients optimization formated for scipy.optimize
+        args:
+            pidCoeff: PID coefficients
+        returns:
+            performance function
+        """
+        pass
+    
 def main():
     drone = Drone(0.5, 0.1, 0.1)
     drone.setPhysics(9.81)
