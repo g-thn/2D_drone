@@ -326,6 +326,7 @@ class Satellite:
 
 
         plt.show()
+
     def generateSatGeometry(self):
         """
         Generates the geometry of the satellite for plotting
@@ -403,9 +404,8 @@ class Satellite:
         ax = plt.axes(xlim=(-0.1, 5), ylim=(-0.5, 0.5))
         ax.set_aspect('equal')
         ax.grid(True)
-        
+        for indFrame in range(len(self.t)):
             
-
         plt.show()
 
     def animate(self):
