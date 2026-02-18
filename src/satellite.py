@@ -33,7 +33,10 @@ class Satellite:
         self.nCurrent =  0 # Thruster sequence index
         self.nNext = 1 # Next thruster sequence index
         self.tfCurrent = self.tfAll[self.nCurrent] # Current thruster sequence time
-        self.tfNext = self.tfAll[self.nNext] # Next thruster sequence time
+        if len(self.tfAll) > 1:
+            self.tfNext = self.tfAll[self.nNext] # Next thruster sequence time
+        else:
+            self.tfNext = self.tfCurrent + 1.0 # If only one command, set next time to current time + 1s
         
         # Control parameters
         self.wpt = np.zeros(2) # waypoint
@@ -106,7 +109,6 @@ class Satellite:
         """
         self.wpt = np.array([x, y])
 
-
     def setPos(self, x, y, theta):
         """
         Sets the objective position of the satellite
@@ -169,6 +171,8 @@ class Satellite:
             thrustSeq: thrust sequence of the 4 thrusters: time, Fa, Fb, Fc, Fd
         """
         self.thrustSeq = thrustSeq
+        self.tfAll = self.thrustSeq[:,0]
+        print('Thrust sequence set. Time sequence: {}'.format(self.tfAll))
 
     def rotMatrix(self,y):
         """
@@ -201,12 +205,15 @@ class Satellite:
             t: time in s
             y: state vector
         """
-        if t > self.tfNext:
+        
+        if (t > self.tfNext) & (t <= self.tfAll[-1]):
+            print(t < self.tfNext)
+            print('t {}, nCurrent: {}, nNext: {}, tfCurrent: {}, tfNext: {}'.format(t,self.nCurrent, self.nNext, self.tfCurrent, self.tfNext))
             self.nCurrent += 1
             self.nNext += 1
             self.tfCurrent = self.tfAll[self.nCurrent]
             self.tfNext = self.tfAll[self.nNext]
-        self.cmd = self.cmdAll[(self.cmdAll[:,0] > self.tfCurrent), :][0,:]
+        self.cmdTmp = self.thrustSeq[(self.thrustSeq[:,0] > self.tfCurrent), :][0,1:]
 
     def eqGenerator(self):
         """
@@ -235,8 +242,8 @@ class Satellite:
             ydot[0] = y[3]
             ydot[1] = y[4]
             ydot[2] = y[5]
-            ydot[3] = self.thrust*np.cos(self.stVec[-1,2])*(self.cmdTmp[0]+self.cmdTmp[1]-(self.cmdTmp[2]+self.cmdTmp[3]))/self.mass
-            ydot[4] = self.thrust*np.sin(self.stVec[-1,2])*(self.cmdTmp[0]+self.cmdTmp[1]-(self.cmdTmp[2]+self.cmdTmp[3]))/self.mass
+            ydot[3] = self.thrust*np.sin(self.stVec[-1,2])*(self.cmdTmp[0]+self.cmdTmp[1]-(self.cmdTmp[2]+self.cmdTmp[3]))/self.mass
+            ydot[4] = self.thrust*np.cos(self.stVec[-1,2])*(self.cmdTmp[0]+self.cmdTmp[1]-(self.cmdTmp[2]+self.cmdTmp[3]))/self.mass
             ydot[5] = self.thrust*self.dist*(self.cmdTmp[0]+self.cmdTmp[2]-(self.cmdTmp[1]+self.cmdTmp[3]))/self.mass
             return ydot
         self.eq = eq
@@ -296,15 +303,14 @@ class Satellite:
         axs[2, 1].set_xlabel('Time (s)')
         axs[2, 1].set_ylabel('Angular Velocity (deg/s)')
 
-        axs[3, 0].plot(self.t, self.cmd[:, 0],'k')
-        axs[3, 0].set_title('F (N)')
+        axs[3, 0].plot(self.t, self.cmd[:, 0], label='Fa')
+        axs[3, 0].plot(self.t, self.cmd[:, 1], label='Fb')
+        axs[3, 0].plot(self.t, self.cmd[:, 2], label='Fc')
+        axs[3, 0].plot(self.t, self.cmd[:, 3], label='Fd')
+        axs[3, 0].set_title('Thruster Commands')
         axs[3, 0].set_xlabel('Time (s)')
-        axs[3, 0].set_ylabel('Force (N)')
-
-        axs[3, 1].plot(self.t, self.cmd[:, 1]*180/np.pi,'k')
-        axs[3, 1].set_title('delta (deg)')  
-        axs[3, 1].set_xlabel('Time (s)')
-        axs[3, 1].set_ylabel('Angle (deg)')
+        axs[3, 0].set_ylabel('Thrust (N)')
+        axs[3, 0].legend() 
 
         plt.show()
 
@@ -324,88 +330,122 @@ class Satellite:
         ax.set_ylabel('Thrust (N)')
         ax.legend() 
 
-
         plt.show()
 
-    def generateSatGeometry(self):
+    def generateSatGeometry(self,xpos=0., ypos=0., thpos=0.,):
         """
         Generates the geometry of the satellite for plotting
         args:
-            None
+            xpos: x position of the satellite in m
+            ypos: y position of the satellite in m
+            thpos: angle of the satellite in radians
         returns:
-            None
+            satSquare: geometry of the satellite body
+            tGeom: geometry of the thrusters
+            plume: geometry of the thruster plumes
+            ta, tb, tc, td: geometry of the thrusters in the body frame
+            pa, pb, pc, pd: geometry of the thruster plumes in the body frame
         """
+        def offsetPos(geom,xoff, yoff, thoff):
+            c = np.cos(thoff)
+            s = np.sin(thoff)
+            geomTmp = np.dot(np.array([[c, -s],[s,  c]]), geom.T).T
+            geomTmp  = geomTmp + xoff*np.array([np.ones(geom.shape[0]), np.zeros(geom.shape[0])]).T + yoff*np.array([np.zeros(geom.shape[0]), np.ones(geom.shape[0])]).T
+            return geomTmp
+        
         self.satSquare = np.array([[self.dist, self.dist],
-                     [self.dist, -self.dist],
-                     [-self.dist, -self.dist],
-                     [-self.dist, self.dist],
-                     [self.dist, self.dist]])
+                                   [self.dist, -self.dist],
+                                   [-self.dist, -self.dist],
+                                   [-self.dist, self.dist],
+                                   [self.dist, self.dist]])
+        self.satSquare = offsetPos(self.satSquare, xpos, ypos, thpos)
+        
         self.tGeom = .2*np.array([[0, 0],
-                    [ .5*self.dist, self.dist],
-                    [-.5*self.dist, self.dist],
-                    [       0,    0]])
+                                  [ .5*self.dist, self.dist],
+                                  [-.5*self.dist, self.dist],
+                                  [       0,    0]])
 
         self.plume = .2*np.array([[.5*self.dist, self.dist],
-                            [0, 3*self.dist],
-                            [-.5*self.dist, self.dist],
-                            [.5*self.dist, self.dist]])
+                                  [0, 3*self.dist],
+                                  [-.5*self.dist, self.dist],
+                                  [.5*self.dist, self.dist]])
 
         self.ta = -self.tGeom + np.array([[self.dist, -self.dist],
-                                [self.dist, -self.dist],
-                                [self.dist, -self.dist],
-                                [self.dist, -self.dist]])
+                                          [self.dist, -self.dist],
+                                          [self.dist, -self.dist],
+                                          [self.dist, -self.dist]])
+        self.ta = offsetPos(self.ta, xpos, ypos, thpos)
+        
         self.tb = -self.tGeom + np.array([[-self.dist, -self.dist],
-                                [-self.dist, -self.dist],
-                                [-self.dist, -self.dist],
-                                [-self.dist, -self.dist]])
+                                          [-self.dist, -self.dist],
+                                          [-self.dist, -self.dist],
+                                          [-self.dist, -self.dist]])
+        self.tb = offsetPos(self.tb, xpos, ypos, thpos)
+        
         self.tc =  self.tGeom + np.array([[-self.dist, self.dist],
-                                [-self.dist, self.dist],
-                                [-self.dist, self.dist],
-                                [-self.dist, self.dist]])
+                                          [-self.dist, self.dist],
+                                          [-self.dist, self.dist],
+                                          [-self.dist, self.dist]])
+        self.tc = offsetPos(self.tc, xpos, ypos, thpos)
+        
         self.td =  self.tGeom + np.array([[self.dist, self.dist],
-                                [self.dist, self.dist],
-                                [self.dist, self.dist],
-                                [self.dist, self.dist]])
+                                          [self.dist, self.dist],
+                                          [self.dist, self.dist],
+                                          [self.dist, self.dist]])
+        self.td = offsetPos(self.td, xpos, ypos, thpos)
+        
         self.pa =-self.plume + np.array([[self.dist, -self.dist],
-                            [self.dist, -self.dist],
-                            [self.dist, -self.dist],
-                            [self.dist, -self.dist]])
+                                         [self.dist, -self.dist],
+                                         [self.dist, -self.dist],
+                                         [self.dist, -self.dist]])
+        self.pa = offsetPos(self.pa, xpos, ypos, thpos)
+        
         self.pb =-self.plume + np.array([[-self.dist, -self.dist],
-                            [-self.dist, -self.dist],  
-                            [-self.dist, -self.dist],
-                            [-self.dist, -self.dist]])
+                                         [-self.dist, -self.dist],
+                                         [-self.dist, -self.dist],
+                                         [-self.dist, -self.dist]])
+        self.pb = offsetPos(self.pb, xpos, ypos, thpos)
+        
         self.pc = self.plume + np.array([[-self.dist, self.dist],
-                            [-self.dist, self.dist],
-                            [-self.dist, self.dist],
-                            [-self.dist, self.dist]])
+                                         [-self.dist, self.dist],
+                                         [-self.dist, self.dist],
+                                         [-self.dist, self.dist]])
+        self.pc = offsetPos(self.pc, xpos, ypos, thpos)
+        
         self.pd = self.plume + np.array([[self.dist, self.dist],
-                            [self.dist, self.dist],
-                            [self.dist, self.dist],
-                            [self.dist, self.dist]])
-    
-    def rotateSatDrawing(self, drawing ,theta):
-        """
-        Rotates the geometry of the satellite for plotting
-        args:
-            theta: angle of rotation in radians
-        returns:
-            None
-        """        
-        R = np.array([[np.cos(theta), -np.sin(theta)],[np.sin(theta), np.cos(theta)]])
-        return np.dot(np.array([[np.cos(theta), -np.sin(theta)],[np.sin(theta), np.cos(theta)]]), drawing.T).T
+                                         [self.dist, self.dist],
+                                         [self.dist, self.dist],
+                                         [self.dist, self.dist]])
+        self.pd = offsetPos(self.pd, xpos, ypos, thpos)
+        return self.satSquare, self.tGeom, self.plume, self.ta, self.tb, self.tc, self.td, self.pa, self.pb, self.pc, self.pd
 
-    def plot2D(self):
+    def plot2D(self,skipFrames=1):
         """
         Plots the satellite in 2D
         args:
             None
         """
         fig = plt.figure()
-        ax = plt.axes(xlim=(-0.1, 5), ylim=(-0.5, 0.5))
+        ax = plt.axes(xlim=(-0.1, 5), ylim=(-2*self.dist, 2*self.dist))
         ax.set_aspect('equal')
         ax.grid(True)
         for indFrame in range(len(self.t)):
-            
+            if indFrame % skipFrames != 0:
+                self.generateSatGeometry(self.stVec[indFrame, 0], self.stVec[indFrame, 1], self.stVec[indFrame, 2])
+                ax.plot(self.satSquare[:,0], self.satSquare[:,1], 'k-')
+                ax.plot(self.ta[:,0], self.ta[:,1], 'r-')
+                ax.plot(self.tb[:,0], self.tb[:,1], 'g-')
+                ax.plot(self.tc[:,0], self.tc[:,1], 'b-')
+                ax.plot(self.td[:,0], self.td[:,1], 'm-')
+                if self.cmd[indFrame, 0] > 0:
+                    ax.plot(self.pa[:,0], self.pa[:,1], 'r-')
+                if self.cmd[indFrame, 1] > 0:
+                    ax.plot(self.pb[:,0], self.pb[:,1], 'g-')
+                if self.cmd[indFrame, 2] > 0:
+                    ax.plot(self.pc[:,0], self.pc[:,1], 'b-')
+                if self.cmd[indFrame, 3] > 0:
+                    ax.plot(self.pd[:,0], self.pd[:,1], 'm-')
+                ax.legend()
         plt.show()
 
     def animate(self):
@@ -419,41 +459,60 @@ class Satellite:
         # ax = plt.axes(xlim=(-2.0, 2.0), ylim=(-2.0, 2.0))
         ax.grid(True)
         ax.set_aspect('equal')
-        x_top = self.com*np.sin(self.stVec[:, 2])
-        y_top = self.com*np.cos(self.stVec[:, 2])
-        x_bot = -self.com*np.sin(self.stVec[:, 2])
-        y_bot = -self.com*np.cos(self.stVec[:, 2])
-        x_force = self.cmd[:,0]*np.sin(self.stVec[:, 2]+self.cmd[:,1])
-        y_force = self.cmd[:,0]*np.cos(self.stVec[:, 2]+self.cmd[:,1])
+        
+        # Generate empty lines for the satellite, thrusters and plumes
+        satLine, = ax.plot([], [], lw=2, color='black')
+        thaLine, = ax.plot([], [], lw=1, color='black')
+        thbLine, = ax.plot([], [], lw=1, color='black')
+        thcLine, = ax.plot([], [], lw=1, color='black')
+        thdLine, = ax.plot([], [], lw=1, color='black')
+        plaLine, = ax.plot([], [], lw=2, color='yellow')
+        plbLine, = ax.plot([], [], lw=2, color='yellow')
+        plcLine, = ax.plot([], [], lw=2, color='yellow')
+        pldLine, = ax.plot([], [], lw=2, color='yellow')
 
-        # Normalize the force
-        norm = (x_force**2+y_force**2)**0.5
-        x_force = x_force/(self.maxForce)
-        y_force = y_force/(self.maxForce)
-
-        line, = ax.plot([], [], lw=2, color='red')
-        force, = ax.plot([], [], lw=1, color='blue')
-        comPt, = ax.plot([], [], lw=2, color='black',marker='o')
-
-        def init():
-            line.set_data([], [])
-            force.set_data([], [])
-            return line, force
-        def animate(i):
+        def init(): # initialization function: plot the background of each frame
+            satLine.set_data([], [])
+            thaLine.set_data([], [])
+            thbLine.set_data([], [])
+            thcLine.set_data([], [])
+            thdLine.set_data([], [])
+            plaLine.set_data([], [])
+            plbLine.set_data([], [])
+            plcLine.set_data([], [])
+            pldLine.set_data([], [])
+            return satLine, thaLine, thbLine, thcLine, thdLine, plaLine, plbLine, plcLine, pldLine
+        
+        def animate(i): # animation function. This is called sequentially
+            # Set a frame centered on the satellite position
+        
+            ax.set_xlim(self.stVec[i, 0] - 2*self.dist, self.stVec[i, 0] + 2*self.dist)
+            ax.set_ylim(self.stVec[i, 1] - 2*self.dist, self.stVec[i, 1] + 2*self.dist)
+            self.generateSatGeometry(self.stVec[i, 0], self.stVec[i, 1], self.stVec[i, 2])
+            satLine.set_data(self.satSquare[:,0], self.satSquare[:,1])
+            thaLine.set_data(self.ta[:,0], self.ta[:,1])
+            thbLine.set_data(self.tb[:,0], self.tb[:,1])
+            thcLine.set_data(self.tc[:,0], self.tc[:,1])
+            thdLine.set_data(self.td[:,0], self.td[:,1])
             
-            ax.set_xlim(self.stVec[i, 0] - .5, self.stVec[i, 0] + .5)
-            ax.set_ylim(self.stVec[i, 1] - .5, self.stVec[i, 1] + .5)
-            line.set_data([self.stVec[i, 0]+x_top[i], self.stVec[i, 0]+x_bot[i]], 
-                          [self.stVec[i, 1]+y_top[i], self.stVec[i, 1]+y_bot[i]])
-            force.set_data([self.stVec[i, 0]+x_top[i], self.stVec[i, 0]+x_top[i]+x_force[i]], 
-                           [self.stVec[i, 1]+y_top[i], self.stVec[i, 1]+y_top[i]+y_force[i]])
-            comPt.set_data([self.stVec[i, 0]], 
-                           [self.stVec[i, 1]])
-            #force.set_color([0, 0, 1-norm[i]/self.maxForce])
-            
-            
-            
-            return line, force
+            if self.cmd[i, 0] > 0:
+                plaLine.set_data(self.pa[:,0], self.pa[:,1])
+            else:
+                plaLine.set_data([], [])
+            if self.cmd[i, 1] > 0:
+                plbLine.set_data(self.pb[:,0], self.pb[:,1])
+            else:
+                plbLine.set_data([], [])
+            if self.cmd[i, 2] > 0:
+                plcLine.set_data(self.pc[:,0], self.pc[:,1])
+            else:
+                plcLine.set_data([], [])
+            if self.cmd[i, 3] > 0:
+                pldLine.set_data(self.pd[:,0], self.pd[:,1])
+            else:
+                pldLine.set_data([], [])
+                
+            return satLine, thaLine, thbLine, thcLine, thdLine, plaLine, plbLine, plcLine, pldLine
         anim = animation.FuncAnimation(fig, animate, init_func=init, frames=len(self.t), interval=1)#, blit=True)
         plt.show()
 
@@ -473,19 +532,26 @@ class Satellite:
         self.plot()
 
 def main():
-    satellite = satellite(0.5, 0.1, 0.1)
+    satellite = Satellite(100, 100, 1.0)
+    satellite.thrust = 20.0
     satellite.setPhysics(9.81)
     satellite.eqGenerator()
-    satellite.setConditions(0., 0., 0*np.pi/180., 2.0, 0.0, 0.0)
+    satellite.setConditions(0., 0., 0.0, 0.0, 0.0, 0.0)
     satellite.setControlMode('static')
-    satellite.setLimitControl(100.0,0.0,45.0*np.pi/180)
     satellite.setThrustSequence(np.array([[0.0, 0.0, 0.0, 0.0, 0.0],
-                                          [1.0, 1.0, 0.0, 0.0, 0.0],
-                                          [2.0, 1.0, 0.0, 1.0, 0.0],
-                                          [3.0, 0.0, 1.0, 0.0, 0.0],
-                                          [4.0, 0.0, 1.0, 1.0, 0.0],
-                                          [5.0, 0.0, 0.0, 0.0, 1.0],
-                                          [6.0, 1.0, 0.0, 0.0, 0.0]]))
+                                          [1.0, 1.0, 1.0, 0.0, 0.0],
+                                          [2.0, 0.0, 0.0, 0.0, 0.0],
+                                          [3.0, 0.0, 0.0, 1.0, 1.0],
+                                          [4.0, 1.0, 0.0, 1.0, 0.0],
+                                          [5.0, 0.0, 0.0, 0.0, 0.0],
+                                          [6.0, 0.0, 1.0, 0.0, 1.0],
+                                          [8.0, 0.0, 0.0, 0.0, 0.0],
+                                          [9.0, 1.0, 1.0, 0.0, 0.0],
+                                          [10.0, 0.0, 0.0, 0.0, 0.0],
+                                          [11.0, 0.0, 0.0, 1.0, 1.0],
+                                          [12.0, 0.0, 0.0, 0.0, 0.0],
+                                          [13.0, 1.0, 0.0, 1.0, 0.0],
+                                          [14.0, 1., 0., 1., 0.]]))
     #satellite.setPos(1.0, 1.0, 0.0)
     #satellite.setVel(0.0, 0.0, 0.0)
 
@@ -512,7 +578,7 @@ def main():
 
     satellite.setWaypoint(1.0, 1.0)
     print('Starting simulation')
-    satellite.solve(0, 100, 0.01)
+    satellite.solve(0, 20, 0.005)
     #satellite.plot2D()
     satellite.animate()
     
