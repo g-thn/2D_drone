@@ -242,7 +242,7 @@ class Satellite:
             ydot[0] = y[3]
             ydot[1] = y[4]
             ydot[2] = y[5]
-            ydot[3] = self.thrust*np.sin(self.stVec[-1,2])*(self.cmdTmp[0]+self.cmdTmp[1]-(self.cmdTmp[2]+self.cmdTmp[3]))/self.mass
+            ydot[3] = -self.thrust*np.sin(self.stVec[-1,2])*(self.cmdTmp[0]+self.cmdTmp[1]-(self.cmdTmp[2]+self.cmdTmp[3]))/self.mass
             ydot[4] = self.thrust*np.cos(self.stVec[-1,2])*(self.cmdTmp[0]+self.cmdTmp[1]-(self.cmdTmp[2]+self.cmdTmp[3]))/self.mass
             ydot[5] = self.thrust*self.dist*(self.cmdTmp[0]+self.cmdTmp[2]-(self.cmdTmp[1]+self.cmdTmp[3]))/self.mass
             return ydot
@@ -532,26 +532,28 @@ class Satellite:
         self.plot()
 
 def main():
-    satellite = Satellite(100, 100, 1.0)
+    satellite = Satellite(100, 100, 1.0,thrust=1000.0)
     satellite.thrust = 20.0
     satellite.setPhysics(9.81)
     satellite.eqGenerator()
     satellite.setConditions(0., 0., 0.0, 0.0, 0.0, 0.0)
     satellite.setControlMode('static')
-    satellite.setThrustSequence(np.array([[0.0, 0.0, 0.0, 0.0, 0.0],
-                                          [1.0, 1.0, 1.0, 0.0, 0.0],
-                                          [2.0, 0.0, 0.0, 0.0, 0.0],
-                                          [3.0, 0.0, 0.0, 1.0, 1.0],
-                                          [4.0, 1.0, 0.0, 1.0, 0.0],
-                                          [5.0, 0.0, 0.0, 0.0, 0.0],
-                                          [6.0, 0.0, 1.0, 0.0, 1.0],
-                                          [8.0, 0.0, 0.0, 0.0, 0.0],
-                                          [9.0, 1.0, 1.0, 0.0, 0.0],
+    satellite.setThrustSequence(np.array([[ 0.0, 0.0, 0.0, 0.0, 0.0],
+                                          [ 1.0, 1.0, 1.0, 0.0, 0.0],
+                                          [ 2.0, 0.0, 0.0, 0.0, 0.0],
+                                          [ 3.0, 0.0, 0.0, 1.0, 1.0],
+                                          [ 4.0, 1.0, 0.0, 1.0, 0.0],
+                                          [ 5.0, 0.0, 0.0, 0.0, 0.0],
+                                          [ 6.0, 0.0, 1.0, 0.0, 1.0],
+                                          [ 8.0, 0.0, 0.0, 0.0, 0.0],
+                                          [ 9.0, 1.0, 1.0, 0.0, 0.0],
                                           [10.0, 0.0, 0.0, 0.0, 0.0],
                                           [11.0, 0.0, 0.0, 1.0, 1.0],
                                           [12.0, 0.0, 0.0, 0.0, 0.0],
-                                          [13.0, 1.0, 0.0, 1.0, 0.0],
-                                          [14.0, 1., 0., 1., 0.]]))
+                                          [13.0, 0.0, 1.0, 0.0, 1.0],
+                                          [14.0, 0.0, 0.0, 0.0, 0.0],
+                                          [15.0, 1.0, 0.0, 1.0, 0.0],
+                                          [16.0, 1.0, 1.0, 0.0, 0.0],]))
     #satellite.setPos(1.0, 1.0, 0.0)
     #satellite.setVel(0.0, 0.0, 0.0)
 
