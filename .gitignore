@@ -2,6 +2,7 @@
 /venv
 
 /src/test.ipynb
+/src/test.ipynb
 test.py
 /src/*.ipynb
 # Ignore all .ipynb files in the src directory
