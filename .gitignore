@@ -3,4 +3,4 @@
 
 /src/test.ipynb
 test.py
-*.ipynb
+/src/*.ipynb
